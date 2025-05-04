@@ -1,0 +1,4 @@
+
+lappend auto_path /usr/share/hubzero-filexfer
+
+

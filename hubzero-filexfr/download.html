@@ -1,0 +1,85 @@
+<!-- Copyright (c) 2004-2020 The Regents of the University of California. -->
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml">
+ <head>
+  <meta http-equiv="Content-Type" content="text/html; charset=iso-8859-1"/>
+  <title>Download</title>
+  <meta name="title" content="Download"/>
+  <style>
+body {
+        background: white;
+        margin: 0px;
+        padding: 0;
+        color: #000;
+        font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
+        font-size: 0.8em;
+        line-height: 1.6em;
+        min-width: 400px;
+}
+h1 {
+        font-size: 2em;
+        color: #666;
+}
+#main {
+        background: white;
+        padding: 4px 4px 4px 8px;
+}
+#description {
+        padding: 0px;
+}
+#warning {
+}
+#logo {
+        padding: 0;
+        height: 80px;
+        position: relative;
+}
+#logo h1 {
+        margin: 0;
+        padding: 0;
+}
+#logo h1 a {
+        width: 128px;
+        height: 49px;
+        display: block;
+        position:absolute;
+        text-indent: 148px;
+        border: none;
+        padding: 15px 0 0 0;
+        color: #CC0000;
+        text-decoration: none;
+        line-height: 1;
+        top: 8px;
+        left: 8px;
+}
+
+  </style>
+  <script type="text/javascript">
+    // this gets called on page load to resize top to just the right size
+    function setup() {
+      window.top.document.getElementById("container").rows = ht + ",100%";
+    }
+    window.onload = setup;
+
+    // action of "Save As..." button: download doc and let user save
+    function doSaveAs() {
+      window.top.open("@PREFIX@/dlfile/?token=@TOKEN@&saveas=1");
+    }
+
+    // action of "Print..." button: print document
+    function doPrint() {
+      window.top.frames["file"].window.print();
+    }
+  </script>
+ </head>
+ <body>
+  <div id="main">
+    @MESSAGE@
+    <form>
+      <input type="button" onclick="doSaveAs()" value="Save As..."> &nbsp;&nbsp;
+      <input type="button" onclick="doPrint()" value="Print...">
+    </form>
+    @WARNING@
+  </div>
+ </body>
+</html>

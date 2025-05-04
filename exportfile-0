@@ -1,0 +1,309 @@
+#!/bin/sh
+#
+# @packag       hubzero-filexfer
+# @file	        exportfile
+# @copyright    Copyright (c) 2004-2020 The Regents of the University of California.
+# @license      http://opensource.org/licenses/MIT MIT
+#
+# Copyright (c) 2004-2020 The Regents of the University of California.
+#
+# Permission is hereby granted, free of charge, to any person obtaining a copy
+# of this software and associated documentation files (the "Software"), to deal
+# in the Software without restriction, including without limitation the rights
+# to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+# copies of the Software, and to permit persons to whom the Software is
+# furnished to do so, subject to the following conditions:
+#
+# The above copyright notice and this permission notice shall be included in
+# all copies or substantial portions of the Software.
+#
+# THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+# IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+# FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+# AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+# LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+# OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+# THE SOFTWARE.
+#
+# HUBzero is a registered trademark of The Regents of the University of California.
+#
+
+# ----------------------------------------------------------------------
+#  USAGE: exportfile ?options? file file ...
+#
+#    options:
+#      -h or --help
+#        Prints a help message.
+#
+#      -t or --timeout <seconds>
+#        Forget about the file after this timeout.  Default is 300
+#        seconds (5 minutes).
+#
+#      -d or --delete
+#        Delete the file after the timeout or when the server is shut
+#        down.
+#
+#      -m or --message
+#        File containing a fragment of HTML text that will be displayed
+#        above the download.  It might say "Here is your data," or
+#        "If you use this data, please cite this source."
+#
+#      -f or --format <type>
+#        Choices are "raw" and "html".  Default is "raw".  The "html"
+#        format causes the server to rewrite links embedded within
+#        the HTML, so that images can be displayed and links can be
+#        traversed properly.
+#
+#      --
+#        Remaining arguments are treated as file names, even if they
+#        start with a -.
+#
+#  This is the client that users invoke to transfer files from their
+#  session to their desktop.  The client tries to connect to a server
+#  to handle the transfer.  If necessary, the client tries to spawn
+#  the server and then connect to it.  The server uses the "clientaction"
+#  program to open a web page on the client's desktop to download the
+#  file.
+#
+#  Note that the file can be any file in the user's home directory,
+#  and therefore is not deleted unless specifically instructed to do
+#  so via the --delete option.
+
+# ----------------------------------------------------------------------
+#\
+exec /usr/bin/tclsh "$0" ${1+"$@"}
+# ----------------------------------------------------------------------
+# tclsh executes everything from here on...
+
+# load util procedures from this path
+lappend auto_path /usr/share/hubzero-filexfer
+
+array set options {
+  --timeout  300
+  --delete   0
+  --message  ""
+  --format   "raw"
+}
+set usage "$argv0 \[-t|--timeout secs\] \[-d|--delete\] \[-m|--message file\] \[-f|--format raw|html\] file file..."
+set manpage "
+USAGE: $usage
+
+  options:
+    -h or --help
+      Prints this help message.
+
+    -t or --timeout <seconds>
+      Forget about the file after this timeout.  Default is 86,400
+      seconds (1 day).
+
+    -d or --delete
+      Delete the file after the timeout or when the tool is shut
+      down.  Should be used only with temporary files.
+
+     -m or --message
+       File containing a fragment of HTML text that will be displayed
+       above the download.  It might say \"Here is your data,\" or
+       \"If you use this data, please cite this source.\"
+
+     -f or --format <type>
+       Choices are \"raw\" and \"html\".  Default is \"raw\".  The \"html\"
+       format causes the server to rewrite links embedded within
+       the HTML, so that images can be displayed and links can be
+       traversed properly.
+
+    --
+      Remaining arguments are treated as file names, even if they
+      start with a -.
+
+You can use this command to transfer one or more files from your
+tool session to your desktop via a web browser.  A separate web
+browser page is opened for each file.  You must have popups enabled
+for this to work properly."
+
+#
+# Parse all command-line arguments and build up a list of files:
+#   file1 timeout1 delete1  file2 timeout2 delete2 ...
+#
+set xferlist ""
+
+while {[llength $argv] > 0} {
+    set opt [lindex $argv 0]
+    set argv [lrange $argv 1 end]
+
+    if {"-" != [string index $opt 0]} {
+        if {![file exists $opt]} {
+            puts stderr "file not found: $opt"
+            exit 1
+        }
+        lappend xferlist $opt $options(--timeout) $options(--delete) $options(--format)
+        continue
+    }
+
+    switch -- $opt {
+        -t - --timeout {
+            if {[llength $argv] == 0} {
+                puts stderr "missing timeout value for $opt"
+                exit 1
+            }
+            set t [lindex $argv 0]
+            set argv [lrange $argv 1 end]
+            if {![string is integer $t]} {
+                puts stderr "bad timeout value \"$t\": should be integer (seconds)"
+                exit 1
+            }
+            set options(--timeout) $t
+        }
+        -d - --delete {
+            set options(--delete) 1
+        }
+        -m - --message {
+            if {[llength $argv] == 0} {
+                puts stderr "missing file name for $opt"
+                exit 1
+            }
+            set m [lindex $argv 0]
+            set argv [lrange $argv 1 end]
+            if {![file readable $m]} {
+                puts stderr "can't read message file \"$m\""
+                exit 1
+            }
+            set options(--message) $m
+        }
+        -f - --format {
+            if {[llength $argv] == 0} {
+                puts stderr "missing value for $opt"
+                exit 1
+            }
+            set f [lindex $argv 0]
+            set argv [lrange $argv 1 end]
+            set choices {raw html}
+            if {[lsearch $choices $f] < 0} {
+                puts stderr "bad value \"$f\": should be [join $choices {, }]"
+                exit 1
+            }
+            set options(--format) $f
+        }
+        -h - --help {
+            puts $manpage
+            exit
+        }
+        -- {
+            foreach file $argv {
+                if {![file exists $file]} {
+                    puts stderr "file not found: $file"
+                    exit 1
+                } elseif {[file isdirectory $file]} {
+                    puts stderr "cannot export directory: $file, use 'tar' to create file."
+                    exit 1
+                }
+                lappend xferlist $file $options(--timeout) $options(--delete) $options(--format)
+            }
+            set argv ""
+        }
+        default {
+            puts stderr "bad option \"$opt\""
+            puts stderr $usage
+            exit 1
+        }
+    }
+}
+
+#
+# Load the settings from the user's resources file.
+# In particular, figure out filexfer_port so we know how to talk
+# to the filexfer server.
+#
+if {[catch {filexfer::resources} result]} {
+    puts stderr "can't load resource configuration:"
+    puts stderr $result
+    exit 1
+}
+array set settings $result
+
+if {![info exists settings(port)]} {
+    puts stderr "missing filexfer_port in resource settings"
+    exit 1
+}
+if {![info exists settings(cookie)]} {
+    puts stderr "missing filexfer_cookie in resource settings"
+    exit 1
+}
+
+#
+# Make a connection to the filexfer server.  Spawn the server, if
+# necessary.
+#
+set buffer ""
+proc server_mesg {sid} {
+    global finished buffer
+
+    if {[gets $sid line] < 0} {
+        set finished 1
+    } else {
+        append buffer $line "\n"
+        if {[info complete $buffer]} {
+            set cmd $buffer
+            set buffer ""
+            set word [lindex $cmd 0]
+            switch -- $word {
+              ERROR {
+                set mesg [lindex $cmd 1]
+                puts stderr $mesg
+                exit 1
+              }
+              default {
+                puts "HUH? $cmd"
+              }
+            }
+        }
+    }
+}
+
+set message ""
+if {[string length $options(--message)] > 0} {
+    set cmds {
+        set fid [open $options(--message) r]
+        set message [read $fid]
+        close $fid
+        # strip out newlines, which message up protocol sent below
+        regsub -all {[\r\n]} $message " " message
+    }
+    if {[catch $cmds result]} {
+        puts stderr "can't load messaage file \"$options(--message)\":"
+        puts stderr $result
+        exit 1
+    }
+}
+
+if {[llength $xferlist] > 0} {
+    if {[catch {filexfer::connect $settings(port) server_mesg} sid]} {
+        puts stderr "can't connect to filexfer server: $sid"
+        exit 1
+    }
+
+    set hubname "???"
+    if {[info exists settings(hubname)]} {
+        set hubname $settings(hubname)
+    }
+
+    set csspath "tools/assets/css"
+    if {[info exists settings(hubtemplate)]} {
+        set csspath "templates/$settings(hubtemplate)/css"
+    }
+
+    set subs [list \
+        @HUBNAME@ $hubname \
+        @CSSPATH@ $csspath \
+        @MESSAGE@ $message \
+    ]
+
+    foreach {file timeout delete format} $xferlist {
+        if {[file pathtype $file] == "relative"} {
+            set file [file join [pwd] $file]
+        }
+        puts $sid [list EXPORT $file $timeout $delete $format $subs $settings(cookie) FILEXFER/1.1]
+    }
+    puts $sid "BYE $settings(cookie) FILEXFER/1.1"
+
+    vwait finished  ;# wait for server to close
+}
