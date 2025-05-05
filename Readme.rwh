@@ -1,4 +1,5 @@
 
 lappend auto_path /usr/share/hubzero-filexfer
 
+export SESSIONDIR=~/git/nanohub_play  # but full absolute path?
 
