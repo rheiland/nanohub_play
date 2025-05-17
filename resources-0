@@ -1,0 +1,11 @@
+sessionid 2638098
+results_directory /home/nanohub/rheiland/data/results/2638098
+filexfer_port 9014
+filexfer_cookie 8hbodmLhIx4M6XPR
+filexfer_decoration
+
+nanovis_server render14.nanohub.org:2001
+molvis_server render14.nanohub.org:2020
+vtkvis_server render14.nanohub.org:2010
+vmdmds_server render14.nanohub.org:2018
+

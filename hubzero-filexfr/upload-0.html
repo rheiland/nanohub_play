@@ -1,0 +1,267 @@
+<!--/* Copyright (c) 2004-2020 The Regents of the University of California. -->
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml">
+ <head>
+  <meta http-equiv="Content-Type" content="text/html; charset=iso-8859-1"/>
+  <title>Upload@FOR@</title>
+  <meta name="title" content="Upload"/>
+  <style>
+body {
+        background: white;
+        margin: 0px;
+        padding: 0;
+        color: #000;
+        font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
+        font-size: 0.8em;
+        line-height: 1.6em;
+        min-width: 400px;
+}
+h1 {
+        font-size: 2em;
+        color: #666;
+}
+.incntl input {
+        width: 97%;
+        margin: 4px 4px 4px 4px;
+}
+.incntl textarea {
+        width: 97%;
+        margin: 8px 8px 8px 8px;
+}
+.incntl {
+        width: 100%;
+}
+#main {
+        background: white;
+        padding: 4px 4px 4px 4px;
+}
+#description {
+        padding: 0px;
+}
+#input {
+        margin: 8px 0px 8px 0px;
+        border: thin solid #d9d9d9;
+}
+#input #heading {
+        padding: 4px;
+        background: #d9d9d9;
+}
+#input #options {
+        margin: 2px 0px 4px 0px;
+}
+#submit {
+        background: #d9d9d9;
+        margin: 8px 0px 0px 0px;
+        padding: 8px 0px 8px 8px;
+}
+#logo {
+        padding: 0;
+        height: 80px;
+        position: relative;
+}
+#logo h1 {
+        margin: 0;
+        padding: 0;
+}
+#logo h1 a {
+        width: 128px;
+        height: 49px;
+        display: block;
+        position: absolute;
+        text-indent: 148px;
+        border: none;
+        padding: 15px 0 0 0;
+        background: url("/media/system/images/hubzero-logo_128x64.png");
+        background-repeat: no-repeat;
+        color: #CC0000;
+        text-decoration: none;
+        line-height: 1;
+        top: 8px;
+        left: 8px;
+}
+</style>
+  <link rel="stylesheet" type="text/css" media="screen" href="/@CSSPATH@/upload.css"/>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/crypto-js/3.1.2/components/core.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/crypto-js/3.1.2/components/md5.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/crypto-js/3.1.2/components/sha256.js"></script>
+  <script language="JavaScript">
+    function setup() {
+      window.resizeTo(750,750);
+      @REPEAT(
+      showhide('textcntls@INDEX@','hidden');
+      )@
+    }
+    window.onload = setup;
+
+    function showhide(name,vis) {
+      if (document.getElementById) {
+        document.getElementById(name).style.visibility = vis;
+        if (vis == 'hidden') {
+          document.getElementById(name).style.height = 0;
+        } else {
+          document.getElementById(name).style.height = '';
+        }
+      }
+    }
+
+    function skipFileSizeChecksum(fileId,sizeId,cksumId) {
+      document.getElementById(cksumId).value = '-1';
+      document.getElementById(sizeId).value = '0';
+    }
+
+    function skipTextSizeChecksum(textId,sizeId,cksumId) {
+      document.getElementById(cksumId).value = '-1';
+      document.getElementById(sizeId).value = '0';
+    }
+
+    function getTextMD5(text) {
+      var md5 = CryptoJS.MD5(CryptoJS.enc.Latin1.parse(text));
+      var hashHex = md5.toString(CryptoJS.enc.Hex);
+
+      return hashHex;
+    }
+
+    function getTextSizeChecksum(textId,sizeId,cksumId) {
+      var fsize = document.getElementById(textId).value.length;
+      document.getElementById(sizeId).value = fsize;
+
+      var cksum = getTextMD5(document.getElementById(textId).value)
+      document.getElementById(cksumId).value = cksum;
+    }
+
+    // https://stackoverflow.com/questions/39112096/calculate-md5-hash-of-a-large-file-using-javascript
+
+    function getFileSizeChecksum(fileId,sizeId,cksumId) {
+      var fsize = document.getElementById(fileId).files[0].size;
+      document.getElementById(sizeId).value = fsize;
+
+      getFileMD5(document.getElementById(fileId).files[0]).then(function(response) {
+         document.getElementById(cksumId).value = response;
+      }, function(error) {
+         document.getElementById(cksumId).value = '1';
+      })
+    }
+
+    function readChunked(file, chunkCallback, endCallback) {
+      var fileSize   = file.size;
+      var chunkSize  = 4 * 1024 * 1024; // 4MB
+      var offset     = 0;
+
+      var reader = new FileReader();
+      reader.onload = function() {
+        if (reader.error) {
+          endCallback(reader.error || {});
+          return;
+        }
+        offset += reader.result.length;
+        // callback for handling read chunk
+        // TODO: handle errors
+        chunkCallback(reader.result, offset, fileSize);
+        if (offset >= fileSize) {
+          endCallback(null);
+          return;
+        }
+        readNext();
+      };
+
+      reader.onerror = function(err) {
+        endCallback(err || {});
+      };
+
+      function readNext() {
+        var fileSlice = file.slice(offset, offset + chunkSize);
+        reader.readAsBinaryString(fileSlice);
+      }
+      readNext();
+    }
+
+    function getFileMD5(blob) {
+      return new Promise((resolve, reject) => {
+        var md5 = CryptoJS.algo.MD5.create();
+        readChunked(blob, (chunk, offs, total) => {
+          md5.update(CryptoJS.enc.Latin1.parse(chunk));
+        }, err => {
+          if (err) {
+            reject(err);
+          } else {
+            // TODO: Handle errors
+            var hash = md5.finalize();
+            var hashHex = hash.toString(CryptoJS.enc.Hex);
+            resolve(hashHex);
+          }
+        });
+      });
+    }
+
+    function getFileSHA256(blob) {
+      return new Promise((resolve, reject) => {
+        var sha256 = CryptoJS.algo.SHA256.create();
+        readChunked(blob, (chunk, offs, total) => {
+          sha256.update(CryptoJS.enc.Latin1.parse(chunk));
+        }, err => {
+          if (err) {
+            reject(err);
+          } else {
+            // TODO: Handle errors
+            var hash = sha256.finalize();
+            var hashHex = hash.toString(CryptoJS.enc.Hex);
+            resolve(hashHex);
+          }
+        });
+      });
+    }
+  </script>
+ </head>
+ <body>
+  <div id="logo">
+    <h1><a href="/" title="@HUBNAME@" target="_blank"><span>@HUBNAME@</span></a></h1>
+  </div>
+  <div id="main">
+    <h1>Upload</h1>
+    <p id="description">
+      Use this form to upload data@FOR@.  If you don't specify a
+      file for a particular input, that input won't be modified by the
+      <i>Upload</i> operation.
+    </p>
+
+    @FORM-START@
+    @REPEAT(
+    <div id="input">
+      <div id="heading">
+        @LABEL@:
+      </div>
+      <div id="options" style="@CONTROLS@">
+        <input type="radio" name="which@INDEX@" value="file@INDEX@" checked onclick="showhide('filecntls@INDEX@','visible'); showhide('textcntls@INDEX@','hidden')">
+        Upload a file</input>
+        <input type="radio" name="which@INDEX@" value="text@INDEX@" onclick="showhide('filecntls@INDEX@','hidden'); showhide('textcntls@INDEX@','visible')">
+        Copy/paste text</input>
+      </div>
+      <div>
+        <input type="hidden" id="fsize@INDEX@" name="fsize@INDEX@" value="0">
+        <input type="hidden" id="cksum@INDEX@" name="cksum@INDEX@" value="0">
+        <div class="incntl" id="filecntls@INDEX@">
+          <input type="file" id="file@INDEX@" name="file@INDEX@" onchange="@FILECHECKSUMFUNC@('file@INDEX@','fsize@INDEX@','cksum@INDEX@')">
+        </div>
+        <div class="incntl" id="textcntls@INDEX@">
+          <textarea rows="10" cols="80" id="text@INDEX@" name="text@INDEX@" onchange="@TEXTCHECKSUMFUNC@('text@INDEX@','fsize@INDEX@','cksum@INDEX@')">Copy/paste your text into this area, and then click the Upload button to upload it.</textarea>
+        </div>
+      </div>
+      <input type="hidden" name="dest@INDEX@" value="@DEST@">
+      <input type="hidden" name="mode@INDEX@" value="@MODE@">
+    </div>
+    )@
+
+      <div id="submit">
+        <input type="submit" value="Upload"/>
+      </div>
+      @FORM-END@
+
+    @FORM-START@
+      <div id="submit">
+        <input type="submit" value="Cancel"/>
+      </div>
+      @FORM-END@
+  </div>
+ </body>
+</html>
+
